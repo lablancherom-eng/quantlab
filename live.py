@@ -180,7 +180,7 @@ def scan_once() -> None:
     """Safe paper-only, minute-frequency bot. Never triggered via public HTTP."""
     with _state_lock:
         _bot_state['last_scan']=datetime.now(timezone.utc).isoformat()
-    if not auto_enabled():
+    if not configured():
         with _state_lock:
             _bot_state.update(signal='DISABLED', detail='PAPER_AUTO_TRADE is not enabled.')
         return
@@ -199,6 +199,13 @@ def scan_once() -> None:
         signal=compute_momentum([float(b['c']) for b in bars])
         with _state_lock:
             _bot_state.update(signal=signal, detail='Real IEX 1-minute bars; 20-bar simple moving average.', last_error=None)
+            if not auto_enabled():
+    with _state_lock:
+        _bot_state['detail'] = (
+            'Observation only: market analyzed, '
+            'paper order execution disabled.'
+        )
+    return
         if signal not in ('LONG','FLAT') or _open_order_exists():
             return
         with _state_lock:
@@ -254,7 +261,7 @@ def _loop() -> None:
 
 def start_worker() -> None:
     global _worker
-    if auto_enabled() and (_worker is None or not _worker.is_alive()):
+    if configured() and (_worker is None or not _worker.is_alive()):
         _stop.clear()
         _worker=threading.Thread(target=_loop,name='quantlab-paper-worker',daemon=True)
         _worker.start()
